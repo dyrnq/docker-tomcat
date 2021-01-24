@@ -39,7 +39,7 @@ RUN set -eux;\
     mkdir -p /opt/src/apr; \
     mkdir -p /opt/src/apr-util; \
     mkdir -p /opt/src/apr-iconv; \
-    curl -fksSL https://mirrors.tuna.tsinghua.edu.cn/AdoptOpenJDK/11/jdk/x64/linux/OpenJDK11U-jdk_x64_linux_hotspot_11.0.9.1_1.tar.gz | tar --extract --gunzip --verbose --strip-components 1 --directory ${JAVA_HOME}}; \
+    curl -fksSL https://github.com/AdoptOpenJDK/openjdk11-binaries/releases/download/jdk-11.0.10%2B9/OpenJDK11U-jdk_x64_linux_hotspot_11.0.10_9.tar.gz | tar --extract --gunzip --verbose --strip-components 1 --directory ${JAVA_HOME}}; \
     curl -fksSL https://mirrors.huaweicloud.com/apache/tomcat/tomcat-${TOMCAT_MAJOR}/v${TOMCAT_VERSION}/bin/apache-tomcat-${TOMCAT_VERSION}.tar.gz | tar --extract --gunzip --verbose --strip-components 1 --directory /usr/local/tomcat; \
     curl -fksSL https://www.openssl.org/source/openssl-${OPENSSL_VERSION}.tar.gz |tar --extract --gunzip --verbose --strip-components 1 --directory /opt/src/openssl; \
     curl -fksSL https://mirrors.huaweicloud.com/apache/apr/apr-${APR_VERSION}.tar.gz | tar --extract --gunzip --verbose --strip-components 1 --directory /opt/src/apr; \
@@ -98,8 +98,8 @@ RUN \
     apt-get clean && \
     apt-get update && \
     apt-get -y upgrade && \
-    apt-get install -y ca-certificates curl vim git psmisc procps iproute2 net-tools -q; \
-    curl -fksSL https://mirrors.tuna.tsinghua.edu.cn/AdoptOpenJDK/11/jre/x64/linux/OpenJDK11U-jre_x64_linux_hotspot_11.0.9.1_1.tar.gz | tar --extract --gunzip --verbose --strip-components 1 --directory ${JAVA_HOME}; \
+    apt-get install -y ca-certificates curl vim git psmisc procps iproute2 net-tools libfreetype6 fontconfig fonts-dejavu -q; \
+    curl -fksSL https://github.com/AdoptOpenJDK/openjdk11-binaries/releases/download/jdk-11.0.10%2B9/OpenJDK11U-jre_x64_linux_hotspot_11.0.10_9.tar.gz | tar --extract --gunzip --verbose --strip-components 1 --directory ${JAVA_HOME}; \
     curl -fksSL https://mirrors.huaweicloud.com/apache/tomcat/tomcat-${TOMCAT_MAJOR}/v${TOMCAT_VERSION}/bin/apache-tomcat-${TOMCAT_VERSION}.tar.gz | tar --extract --gunzip --verbose --strip-components 1 --directory ${CATALINA_HOME};
 
 COPY --from=build /usr/local/apr /usr/local/apr
