@@ -74,7 +74,7 @@ RUN ./configure --with-apr=/usr/local/apr --with-java-home=${JAVA_HOME} --with-s
 
 
 
-
+#https://github.com/docker-library/tomcat/blob/master/8.5/jdk11/adoptopenjdk-hotspot/Dockerfile
 #FROM adoptopenjdk/openjdk11:jre-11.0.9.1_1-debian
 #FROM openjdk:11.0.10-jre-buster
 
@@ -83,14 +83,17 @@ FROM debian:10
 ENV DEBIAN_FRONTEND=noninteractive \
     TOMCAT_MAJOR=8 \
     TOMCAT_VERSION=8.5.61 \
-    JAVA_HOME=/usr/local/java
+    GOSU_VERSION=1.12 \
+    JAVA_HOME=/usr/local/java \
+    CATALINA_HOME=/usr/local/tomcat
 
-ENV CATALINA_HOME /usr/local/tomcat
 ENV PATH $JAVA_HOME/bin:$CATALINA_HOME/bin:$PATH
-RUN mkdir -p "$JAVA_HOME"
-RUN mkdir -p "$CATALINA_HOME"
+RUN mkdir -p "$JAVA_HOME" && mkdir -p "$CATALINA_HOME"
+
 WORKDIR $CATALINA_HOME
 
+COPY --from=build /usr/local/apr /usr/local/apr
+COPY --from=build /usr/local/openssl /usr/local/openssl
 
 RUN \
     sed -i "s@deb.debian.org@mirrors.huaweicloud.com@g" /etc/apt/sources.list && \
@@ -99,24 +102,25 @@ RUN \
     apt-get update && \
     apt-get -y upgrade && \
     apt-get install -y ca-certificates curl vim git psmisc procps iproute2 net-tools libfreetype6 fontconfig fonts-dejavu -q; \
+    curl -fksSL -o /usr/local/bin/gosu https://github.com/tianon/gosu/releases/download/${GOSU_VERSION}/gosu-amd64; \
     curl -fksSL https://github.com/AdoptOpenJDK/openjdk11-binaries/releases/download/jdk-11.0.10%2B9/OpenJDK11U-jre_x64_linux_hotspot_11.0.10_9.tar.gz | tar --extract --gunzip --verbose --strip-components 1 --directory ${JAVA_HOME}; \
-    curl -fksSL https://mirrors.huaweicloud.com/apache/tomcat/tomcat-${TOMCAT_MAJOR}/v${TOMCAT_VERSION}/bin/apache-tomcat-${TOMCAT_VERSION}.tar.gz | tar --extract --gunzip --verbose --strip-components 1 --directory ${CATALINA_HOME};
-
-COPY --from=build /usr/local/apr /usr/local/apr
-COPY --from=build /usr/local/openssl /usr/local/openssl
-
-RUN \
+    curl -fksSL https://mirrors.huaweicloud.com/apache/tomcat/tomcat-${TOMCAT_MAJOR}/v${TOMCAT_VERSION}/bin/apache-tomcat-${TOMCAT_VERSION}.tar.gz | tar --extract --gunzip --verbose --strip-components 1 --directory ${CATALINA_HOME}; \
     echo "LD_LIBRARY_PATH=\$LD_LIBRARY_PATH:/usr/local/apr/lib" >> ${CATALINA_HOME}/bin/setenv.sh; \
     echo "export LD_LIBRARY_PATH" >> ${CATALINA_HOME}/bin/setenv.sh; \
     sed -i 's@Connector port="8080" protocol="HTTP/1.1"@Connector port="8080" protocol="org.apache.coyote.http11.Http11AprProtocol"@g' ${CATALINA_HOME}/conf/server.xml; \
     find ./bin/ -name '*.sh' -exec sed -ri 's|^#!/bin/sh$|#!/usr/bin/env bash|' '{}' +; \
     chmod -R +rX .; \
     chmod 777 logs temp work; \
-    catalina.sh version    
-
-RUN ln -fs /usr/share/zoneinfo/Asia/Shanghai /etc/localtime && dpkg-reconfigure --frontend noninteractive tzdata
+    catalina.sh version; \
+    ln -fs /usr/share/zoneinfo/Asia/Shanghai /etc/localtime && dpkg-reconfigure --frontend noninteractive tzdata; \
+    rm -rf /var/lib/apt/lists/*; \
+    chmod +x /usr/local/bin/gosu; \
+    gosu --version;
 
 
 
 EXPOSE 8080
+
+COPY ./docker-entrypoint.sh /
+ENTRYPOINT ["/docker-entrypoint.sh"]
 CMD ["catalina.sh", "run"]
