@@ -3,18 +3,24 @@
 #FROM openjdk:11.0.10-jdk-buster as build
 FROM debian:10 as build
 
+ARG TOMCAT_MAJOR
+ARG TOMCAT_VERSION
+ARG OPENSSL_VERSION
+ARG APR_VERSION
+ARG APR_UTIL_VERSION
+ARG APR_ICONV_VERSION
+ARG JDK11_VERSION="11.0.13+8"
+
 ENV DEBIAN_FRONTEND=noninteractive \
-    TOMCAT_MAJOR=8 \
-    TOMCAT_VERSION=8.5.61 \
-    OPENSSL_VERSION=1.1.1i \
-    APR_VERSION=1.7.0 \
-    APR_UTIL_VERSION=1.6.1 \
-    APR_ICONV_VERSION=1.2.2 \
+    TOMCAT_MAJOR=${TOMCAT_MAJOR:-8} \
+    TOMCAT_VERSION=${TOMCAT_VERSION:-8.5.73} \
+    OPENSSL_VERSION=${OPENSSL_VERSION:-1.1.1m} \
+    APR_VERSION=${APR_VERSION:-1.7.0} \
+    APR_UTIL_VERSION=${APR_UTIL_VERSION:-1.6.1} \
+    APR_ICONV_VERSION=${APR_ICONV_VERSION:-1.2.2} \
     JAVA_HOME=/usr/local/java
 
 RUN set -eux;\
-    sed -i "s@deb.debian.org@mirrors.huaweicloud.com@g" /etc/apt/sources.list && \
-    sed -i "s@security.debian.org@mirrors.huaweicloud.com@g" /etc/apt/sources.list && \
     apt-get clean && \
     apt-get update && \
     apt-get install \
@@ -39,12 +45,31 @@ RUN set -eux;\
     mkdir -p /opt/src/apr; \
     mkdir -p /opt/src/apr-util; \
     mkdir -p /opt/src/apr-iconv; \
-    curl -fksSL https://github.com/AdoptOpenJDK/openjdk11-binaries/releases/download/jdk-11.0.10%2B9/OpenJDK11U-jdk_x64_linux_hotspot_11.0.10_9.tar.gz | tar --extract --gunzip --verbose --strip-components 1 --directory ${JAVA_HOME}; \
-    curl -fksSL https://mirrors.huaweicloud.com/apache/tomcat/tomcat-${TOMCAT_MAJOR}/v${TOMCAT_VERSION}/bin/apache-tomcat-${TOMCAT_VERSION}.tar.gz | tar --extract --gunzip --verbose --strip-components 1 --directory /usr/local/tomcat; \
-    curl -fksSL https://www.openssl.org/source/openssl-${OPENSSL_VERSION}.tar.gz |tar --extract --gunzip --verbose --strip-components 1 --directory /opt/src/openssl; \
-    curl -fksSL https://mirrors.huaweicloud.com/apache/apr/apr-${APR_VERSION}.tar.gz | tar --extract --gunzip --verbose --strip-components 1 --directory /opt/src/apr; \
-    curl -fksSL https://mirrors.huaweicloud.com/apache/apr/apr-util-${APR_UTIL_VERSION}.tar.gz | tar --extract --gunzip --verbose --strip-components 1 --directory /opt/src/apr-util; \
-    curl -fksSL https://mirrors.huaweicloud.com/apache/apr/apr-iconv-${APR_ICONV_VERSION}.tar.gz | tar --extract --gunzip --verbose --strip-components 1 --directory /opt/src/apr-iconv;
+    ARCH="$(dpkg --print-architecture)"; \
+    case "${ARCH}" in \
+       aarch64|arm64) \
+         javaArch="aarch64"; \
+         ;; \
+       armhf|armv7l) \
+         javaArch="arm"; \
+         ;; \
+       ppc64el|ppc64le) \
+         javaArch="ppc64le"; \
+         ;; \
+       amd64|x86_64) \
+         javaArch="x64"; \
+         ;; \
+       *) \
+         echo "Unsupported arch: ${ARCH}"; \
+         exit 1; \
+         ;; \
+    esac; \
+    curl -fsSL https://github.com/adoptium/temurin11-binaries/releases/download/jdk-$(printf '%s' $JDK11_VERSION | sed -e 's@+@%2B@g')/OpenJDK11U-jdk_${javaArch}_linux_hotspot_$(printf '%s' $JDK11_VERSION | sed -e 's@+@_@g').tar.gz | tar --extract --gunzip --verbose --strip-components 1 --directory ${JAVA_HOME}; \
+    curl -fsSL https://archive.apache.org/dist/tomcat/tomcat-${TOMCAT_MAJOR}/v${TOMCAT_VERSION}/bin/apache-tomcat-${TOMCAT_VERSION}.tar.gz | tar --extract --gunzip --verbose --strip-components 1 --directory /usr/local/tomcat; \
+    curl -fsSL https://www.openssl.org/source/openssl-${OPENSSL_VERSION}.tar.gz |tar --extract --gunzip --verbose --strip-components 1 --directory /opt/src/openssl; \
+    curl -fsSL https://archive.apache.org/dist/apr/apr-${APR_VERSION}.tar.gz | tar --extract --gunzip --verbose --strip-components 1 --directory /opt/src/apr; \
+    curl -fsSL https://archive.apache.org/dist/apr/apr-util-${APR_UTIL_VERSION}.tar.gz | tar --extract --gunzip --verbose --strip-components 1 --directory /opt/src/apr-util; \
+    curl -fsSL https://archive.apache.org/dist/apr/apr-iconv-${APR_ICONV_VERSION}.tar.gz | tar --extract --gunzip --verbose --strip-components 1 --directory /opt/src/apr-iconv;
 
 
 
@@ -80,10 +105,15 @@ RUN ./configure --with-apr=/usr/local/apr --with-java-home=${JAVA_HOME} --with-s
 
 FROM debian:10
 
+ARG TOMCAT_MAJOR
+ARG TOMCAT_VERSION
+ARG GOSU_VERSION
+ARG JDK11_VERSION="11.0.13+8"
+
 ENV DEBIAN_FRONTEND=noninteractive \
-    TOMCAT_MAJOR=8 \
-    TOMCAT_VERSION=8.5.61 \
-    GOSU_VERSION=1.12 \
+    TOMCAT_MAJOR=${TOMCAT_MAJOR:-8} \
+    TOMCAT_VERSION=${TOMCAT_VERSION:-8.5.73} \
+    GOSU_VERSION=${GOSU_VERSION:-1.14} \
     JAVA_HOME=/usr/local/java \
     CATALINA_HOME=/usr/local/tomcat
 
@@ -96,15 +126,36 @@ COPY --from=build /usr/local/apr /usr/local/apr
 COPY --from=build /usr/local/openssl /usr/local/openssl
 
 RUN \
-    sed -i "s@deb.debian.org@mirrors.huaweicloud.com@g" /etc/apt/sources.list && \
-    sed -i "s@security.debian.org@mirrors.huaweicloud.com@g" /etc/apt/sources.list && \
     apt-get clean && \
     apt-get update && \
     apt-get -y upgrade && \
     apt-get install -y ca-certificates curl vim git psmisc procps iproute2 net-tools libfreetype6 fontconfig fonts-dejavu -q; \
-    curl -fksSL -o /usr/local/bin/gosu https://github.com/tianon/gosu/releases/download/${GOSU_VERSION}/gosu-amd64; \
-    curl -fksSL https://github.com/AdoptOpenJDK/openjdk11-binaries/releases/download/jdk-11.0.10%2B9/OpenJDK11U-jre_x64_linux_hotspot_11.0.10_9.tar.gz | tar --extract --gunzip --verbose --strip-components 1 --directory ${JAVA_HOME}; \
-    curl -fksSL https://mirrors.huaweicloud.com/apache/tomcat/tomcat-${TOMCAT_MAJOR}/v${TOMCAT_VERSION}/bin/apache-tomcat-${TOMCAT_VERSION}.tar.gz | tar --extract --gunzip --verbose --strip-components 1 --directory ${CATALINA_HOME}; \
+    ARCH="$(dpkg --print-architecture)"; \
+    case "${ARCH}" in \
+       aarch64|arm64) \
+         javaArch="aarch64"; \
+         gosuArch="arm64"; \
+         ;; \
+       armhf|armv7l) \
+         javaArch="arm"; \
+         gosuArch="armhf"; \
+         ;; \
+       ppc64el|ppc64le) \
+         javaArch="ppc64le"; \
+         gosuArch="ppc64el"; \
+         ;; \
+       amd64|x86_64) \
+         javaArch="x64"; \
+         gosuArch="amd64"; \
+         ;; \
+       *) \
+         echo "Unsupported arch: ${ARCH}"; \
+         exit 1; \
+         ;; \
+    esac; \
+    curl -fsSL -o /usr/local/bin/gosu https://github.com/tianon/gosu/releases/download/${GOSU_VERSION}/gosu-${gosuArch}; \
+    curl -fsSL https://github.com/adoptium/temurin11-binaries/releases/download/jdk-$(printf '%s' $JDK11_VERSION | sed -e 's@+@%2B@g')/OpenJDK11U-jre_${javaArch}_linux_hotspot_$(printf '%s' $JDK11_VERSION | sed -e 's@+@_@g').tar.gz | tar --extract --gunzip --verbose --strip-components 1 --directory ${JAVA_HOME}; \
+    curl -fsSL https://archive.apache.org/dist/tomcat/tomcat-${TOMCAT_MAJOR}/v${TOMCAT_VERSION}/bin/apache-tomcat-${TOMCAT_VERSION}.tar.gz | tar --extract --gunzip --verbose --strip-components 1 --directory ${CATALINA_HOME}; \
     echo "LD_LIBRARY_PATH=\$LD_LIBRARY_PATH:/usr/local/apr/lib" >> ${CATALINA_HOME}/bin/setenv.sh; \
     echo "export LD_LIBRARY_PATH" >> ${CATALINA_HOME}/bin/setenv.sh; \
     sed -i 's@Connector port="8080" protocol="HTTP/1.1"@Connector port="8080" protocol="org.apache.coyote.http11.Http11AprProtocol"@g' ${CATALINA_HOME}/conf/server.xml; \
