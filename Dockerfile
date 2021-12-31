@@ -129,7 +129,7 @@ RUN \
     apt-get clean && \
     apt-get update && \
     apt-get -y upgrade && \
-    apt-get install -y ca-certificates curl vim git psmisc procps iproute2 net-tools libfreetype6 fontconfig fonts-dejavu -q; \
+    apt-get install -y ca-certificates p11-kit curl vim git psmisc procps iproute2 net-tools libfreetype6 fontconfig fonts-dejavu -q; \
     ARCH="$(dpkg --print-architecture)"; \
     case "${ARCH}" in \
        aarch64|arm64) \
@@ -166,7 +166,31 @@ RUN \
     ln -fs /usr/share/zoneinfo/Asia/Shanghai /etc/localtime && dpkg-reconfigure --frontend noninteractive tzdata; \
     rm -rf /var/lib/apt/lists/*; \
     chmod +x /usr/local/bin/gosu; \
-    gosu --version;
+    gosu --version; \
+    \
+# update "cacerts" bundle to use Debian's CA certificates (and make sure it stays up-to-date with changes to Debian's store)
+# see https://github.com/docker-library/openjdk/issues/327
+#     http://rabexc.org/posts/certificates-not-working-java#comment-4099504075
+#     https://salsa.debian.org/java-team/ca-certificates-java/blob/3e51a84e9104823319abeb31f880580e46f45a98/debian/jks-keystore.hook.in
+#     https://git.alpinelinux.org/aports/tree/community/java-cacerts/APKBUILD?id=761af65f38b4570093461e6546dcf6b179d2b624#n29
+    { \
+        echo '#!/usr/bin/env bash'; \
+        echo 'set -Eeuo pipefail'; \
+        echo 'trust extract --overwrite --format=java-cacerts --filter=ca-anchors --purpose=server-auth "$JAVA_HOME/lib/security/cacerts"'; \
+    } > /etc/ca-certificates/update.d/docker-openjdk; \
+    chmod +x /etc/ca-certificates/update.d/docker-openjdk; \
+    /etc/ca-certificates/update.d/docker-openjdk; \
+    \
+# https://github.com/docker-library/openjdk/issues/331#issuecomment-498834472
+    find "$JAVA_HOME/lib" -name '*.so' -exec dirname '{}' ';' | sort -u > /etc/ld.so.conf.d/docker-openjdk.conf; \
+    ldconfig; \
+    \
+# https://github.com/docker-library/openjdk/issues/212#issuecomment-420979840
+# https://openjdk.java.net/jeps/341
+    java -Xshare:dump; \
+    \
+# basic smoke test
+    java --version
 
 
 
